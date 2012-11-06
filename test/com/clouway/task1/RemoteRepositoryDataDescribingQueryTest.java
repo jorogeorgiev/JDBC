@@ -1,6 +1,5 @@
 package com.clouway.task1;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,6 +25,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
   private String schemaPattern = null;
   private String tableNamePattern = null;
   private String[] types = null;
+  private QueryMessages queryMessage;
   private Statement statement;
   private DatabaseMetaData databaseMetaData;
   private RemoteRepositoryDataDescribingQuery remoteRepositoryDDQ;
@@ -46,43 +46,32 @@ public class RemoteRepositoryDataDescribingQueryTest {
     String username = "postgres";
     String password = "";
     Connection connection = DriverManager.getConnection(repositoryAddress, username, password);
+    queryMessage = new QueryMessages();
     databaseMetaData = connection.getMetaData();
     statement = connection.createStatement();
-    remoteRepositoryDDQ = new RemoteRepositoryDataDescribingQuery(statement);
+    remoteRepositoryDDQ = new RemoteRepositoryDataDescribingQuery(statement, queryMessage);
     remoteRepositoryDDQ.createTable(createTableStatement);
   }
-
-
-  @After
-  public void tearDown() throws SQLException {
-
-    deleteTable(table);
-
-    statement.close();
-
-  }
-
-
-
 
   class RemoteRepositoryDataDescribingQuery {
 
     private String queryStatus = "";
     private final Statement statement;
+    private QueryMessages message;
 
-    public RemoteRepositoryDataDescribingQuery(Statement statement) {
+    public RemoteRepositoryDataDescribingQuery(Statement statement, QueryMessages message) {
 
       this.statement = statement;
 
+      this.message = message;
     }
 
-    public String createTable(String createTableStatement){
-     try {
+    public String createTable(String createTableStatement) {
+      try {
         statement.executeUpdate(createTableStatement);
-        queryStatus = "Query is executed successfully";
+        queryStatus = message.onSuccess();
       } catch (SQLException e) {
-        queryStatus = "Query is executed with fail";
-       e.printStackTrace();
+        queryStatus = message.onFailure();
       }
       return queryStatus;
     }
@@ -94,6 +83,23 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     }
 
+
+  }
+
+
+  class QueryMessages {
+
+    public String onSuccess() {
+
+      return "Query is executed successfully";
+
+    }
+
+    public String onFailure() {
+
+      return "Query is executed with failure";
+
+    }
 
   }
 
@@ -116,7 +122,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     remoteRepositoryDDQ.dropTable("failed_table");
 
-    assertThat(queryStatus, is("Query is executed successfully"));
+    assertThat(queryStatus, is(queryMessage.onSuccess()));
 
   }
 
@@ -127,7 +133,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     String queryStatus = remoteRepositoryDDQ.createTable(createTableStatement);
 
-    assertThat(queryStatus,is("Query is executed with fail"));
+    assertThat(queryStatus, is(queryMessage.onFailure()));
 
   }
 
@@ -165,6 +171,11 @@ public class RemoteRepositoryDataDescribingQueryTest {
         tableExistence = true;
       }
     }
+
+    deleteTable(table);
+
+    statement.close();
+
     return tableExistence;
   }
 
