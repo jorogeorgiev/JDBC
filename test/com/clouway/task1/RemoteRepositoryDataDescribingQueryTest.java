@@ -4,33 +4,23 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.sql.Connection;
-import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 
 /**
  * @author georgi.hristov@clouway.com
  */
 public class RemoteRepositoryDataDescribingQueryTest {
 
-
-  private String catalog = null;
-  private String schemaPattern = null;
-  private String tableNamePattern = null;
-  private String[] types = null;
   private Map<String, QueryExecutionReport> reportMap;
   private QueryMessages queryMessage;
   private Statement statement;
-  private DatabaseMetaData databaseMetaData;
   private RemoteRepositoryDataDescribingQuery remoteRepositoryDDQ;
   private String table = "task1";
   private String incorrectCreateTableStatement = "Create table " + table + "(test varchar(32);";
@@ -45,7 +35,6 @@ public class RemoteRepositoryDataDescribingQueryTest {
     Connection connection = DriverManager.getConnection(repositoryAddress, username, password);
     queryMessage = new QueryMessages();
     reportMap = new Report().createReportStatements();
-    databaseMetaData = connection.getMetaData();
     statement = connection.createStatement();
     remoteRepositoryDDQ = new RemoteRepositoryDataDescribingQuery(statement, queryMessage);
 
@@ -68,7 +57,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     public String createTable(String createTableStatement) {
 
-      String queryStatus = "";
+      String queryStatus;
 
       try {
 
@@ -90,7 +79,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
     public String dropTable(String tableName) throws SQLException {
 
 
-      String queryStatus = "";
+      String queryStatus;
 
       try {
 
@@ -213,34 +202,6 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     assertThat(queryStatus, is(reportMap.get(result).showReport()));
 
-  }
-
-
-  private void assertThatTableExists() throws SQLException {
-
-    assertTrue(hasTable(table));
-
-  }
-
-  private void assertThatTableNotExists() throws SQLException {
-
-    assertFalse(hasTable(table));
-
-  }
-
-
-  private boolean hasTable(String tableName) throws SQLException {
-
-    ResultSet result = databaseMetaData.getTables(catalog, schemaPattern, tableNamePattern, types);
-    Boolean tableExistence = false;
-    while (result.next()) {
-      String droppedTable = result.getString(3);
-      if (droppedTable.equals(tableName)) {
-        tableExistence = true;
-      }
-    }
-
-    return tableExistence;
   }
 
 
