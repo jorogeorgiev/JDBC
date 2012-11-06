@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
  */
 public class RemoteRepositoryDataDescribingQueryTest {
 
-  private Boolean tableExistence = false;
+
   private String catalog = null;
   private String schemaPattern = null;
   private String tableNamePattern = null;
@@ -33,14 +33,8 @@ public class RemoteRepositoryDataDescribingQueryTest {
   private DatabaseMetaData databaseMetaData;
   private RemoteRepositoryDataDescribingQuery remoteRepositoryDDQ;
   private String table = "task1";
-  private String createTableStatement = "CREATE TABLE " + table +
-          "(" +
-          "name varchar(32)," +
-          "age int," +
-          "egn varchar(10) NOT NULL," +
-          "email varchar(32)," +
-          "CONSTRAINT task1_pk PRIMARY KEY(egn)" +
-          ");";
+  private String incorrectCreateTableStatement = "Create table " + table + "(test varchar(32);";
+  private String correctCreateTableStatement = "Create table " + table + "(test varchar(32));";
 
 
   @Before
@@ -54,15 +48,14 @@ public class RemoteRepositoryDataDescribingQueryTest {
     databaseMetaData = connection.getMetaData();
     statement = connection.createStatement();
     remoteRepositoryDDQ = new RemoteRepositoryDataDescribingQuery(statement, queryMessage);
-    remoteRepositoryDDQ.createTable(createTableStatement);
-  }
 
+  }
 
 
   class RemoteRepositoryDataDescribingQuery {
 
-    private String queryStatus = "";
     private final Statement statement;
+
     private QueryMessages message;
 
     public RemoteRepositoryDataDescribingQuery(Statement statement, QueryMessages message) {
@@ -70,22 +63,48 @@ public class RemoteRepositoryDataDescribingQueryTest {
       this.statement = statement;
 
       this.message = message;
+
     }
 
     public String createTable(String createTableStatement) {
+
+      String queryStatus = "";
+
       try {
+
         statement.executeUpdate(createTableStatement);
+
         queryStatus = message.onSuccess();
+
       } catch (SQLException e) {
+
         queryStatus = message.onFailure();
+
       }
+
       return queryStatus;
+
     }
 
 
-    public void dropTable(String tableName) throws SQLException {
+    public String dropTable(String tableName) throws SQLException {
 
-      statement.executeUpdate("DROP TABLE " + tableName + ";");
+
+      String queryStatus = "";
+
+      try {
+
+        statement.executeUpdate("DROP TABLE " + tableName + ";");
+
+        queryStatus = message.onSuccess();
+
+      } catch (SQLException e) {
+
+        queryStatus = message.onFailure();
+
+      }
+
+      return queryStatus;
 
     }
 
@@ -110,8 +129,6 @@ public class RemoteRepositoryDataDescribingQueryTest {
   }
 
 
-
-
   interface QueryExecutionReport {
 
     String showReport();
@@ -119,12 +136,13 @@ public class RemoteRepositoryDataDescribingQueryTest {
   }
 
 
-
   class QueryExecutionReportOnSuccess implements QueryExecutionReport {
 
     @Override
     public String showReport() {
-     return queryMessage.onSuccess();
+
+      return queryMessage.onSuccess();
+
     }
 
   }
@@ -134,69 +152,64 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     @Override
     public String showReport() {
+
       return queryMessage.onFailure();
+
     }
+
   }
 
+  class Report {
 
-  class Report{
+    private Map<String, QueryExecutionReport> report = new HashMap<String, QueryExecutionReport>();
 
-    private Map<String , QueryExecutionReport> report = new HashMap<String,QueryExecutionReport>();
+    public Map<String, QueryExecutionReport> createReportStatements() {
 
-    public Map<String , QueryExecutionReport> createReportStatements(){
+      report.put("success", new QueryExecutionReportOnSuccess());
 
-      report.put("success",new QueryExecutionReportOnSuccess());
       report.put("failure", new QueryExecutionReportOnFailure());
+
       return report;
+
     }
 
   }
-
-
-
 
 
   @Test
+  public void successfulCreatingTableExecutionNotifiesUser() throws SQLException {
 
-  public void queryCreatesTable() throws SQLException {
-
-    assertThatTableExists();
+    assertQueryExecutionResult("success", remoteRepositoryDDQ.createTable(correctCreateTableStatement));
 
     deleteTable(table);
 
   }
 
-
   @Test
-  public void queryIndicatedCreatingTableStatementExecutionSuccess() throws SQLException {
+  public void failedCreatingTableExecutionNotifiesUser() throws SQLException {
 
-    assertQueryExecutionResult("success","Create table fable(test varchar(32));");
-
-    deleteTable("fable");
+    assertQueryExecutionResult("failure", remoteRepositoryDDQ.createTable(incorrectCreateTableStatement));
 
   }
 
   @Test
-  public void queryIndicatedCreatingTableStatementExecutionFailure() throws SQLException {
+  public void successfulTableDroppingNotifiesUser() throws SQLException {
 
-    assertQueryExecutionResult("failure","Create table fable(test varchar(32);");
+    remoteRepositoryDDQ.createTable(correctCreateTableStatement);
+
+    assertQueryExecutionResult("success", remoteRepositoryDDQ.dropTable(table));
 
   }
-
 
   @Test
-  public void queryDropsTable() throws SQLException {
+  public void failedTableDroppingNotifiesUser() throws SQLException {
 
-    remoteRepositoryDDQ.dropTable(table);
-
-    assertThatTableNotExists();
+    assertQueryExecutionResult("failure", remoteRepositoryDDQ.dropTable(table));
 
   }
 
 
-  private void assertQueryExecutionResult(String  result, String statement){
-
-    String queryStatus = remoteRepositoryDDQ.createTable(statement);
+  private void assertQueryExecutionResult(String result, String queryStatus) {
 
     assertThat(queryStatus, is(reportMap.get(result).showReport()));
 
@@ -219,7 +232,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
   private boolean hasTable(String tableName) throws SQLException {
 
     ResultSet result = databaseMetaData.getTables(catalog, schemaPattern, tableNamePattern, types);
-
+    Boolean tableExistence = false;
     while (result.next()) {
       String droppedTable = result.getString(3);
       if (droppedTable.equals(tableName)) {
@@ -233,7 +246,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
   private void deleteTable(String tableName) throws SQLException {
 
-      statement.executeUpdate("DROP TABLE " + tableName + ";");
+    statement.executeUpdate("DROP TABLE " + tableName + ";");
 
   }
 
