@@ -9,6 +9,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
@@ -25,6 +27,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
   private String schemaPattern = null;
   private String tableNamePattern = null;
   private String[] types = null;
+  private Map<String, QueryExecutionReport> reportMap;
   private QueryMessages queryMessage;
   private Statement statement;
   private DatabaseMetaData databaseMetaData;
@@ -47,11 +50,14 @@ public class RemoteRepositoryDataDescribingQueryTest {
     String password = "";
     Connection connection = DriverManager.getConnection(repositoryAddress, username, password);
     queryMessage = new QueryMessages();
+    reportMap = new Report().createReportStatements();
     databaseMetaData = connection.getMetaData();
     statement = connection.createStatement();
     remoteRepositoryDDQ = new RemoteRepositoryDataDescribingQuery(statement, queryMessage);
     remoteRepositoryDDQ.createTable(createTableStatement);
   }
+
+
 
   class RemoteRepositoryDataDescribingQuery {
 
@@ -104,11 +110,59 @@ public class RemoteRepositoryDataDescribingQueryTest {
   }
 
 
+
+
+  interface QueryExecutionReport {
+
+    String showReport();
+
+  }
+
+
+
+  class QueryExecutionReportOnSuccess implements QueryExecutionReport {
+
+    @Override
+    public String showReport() {
+     return queryMessage.onSuccess();
+    }
+
+  }
+
+
+  class QueryExecutionReportOnFailure implements QueryExecutionReport {
+
+    @Override
+    public String showReport() {
+      return queryMessage.onFailure();
+    }
+  }
+
+
+  class Report{
+
+    private Map<String , QueryExecutionReport> report = new HashMap<String,QueryExecutionReport>();
+
+    public Map<String , QueryExecutionReport> createReportStatements(){
+
+      report.put("success",new QueryExecutionReportOnSuccess());
+      report.put("failure", new QueryExecutionReportOnFailure());
+      return report;
+    }
+
+  }
+
+
+
+
+
   @Test
 
   public void queryCreatesTable() throws SQLException {
 
     assertThatTableExists();
+
+    deleteTable(table);
 
   }
 
@@ -116,24 +170,16 @@ public class RemoteRepositoryDataDescribingQueryTest {
   @Test
   public void queryIndicatedCreatingTableStatementExecutionSuccess() throws SQLException {
 
-    String createTableStatement = "Create table failed_table(test varchar(32));";
+    assertQueryExecutionResult("success","Create table fable(test varchar(32));");
 
-    String queryStatus = remoteRepositoryDDQ.createTable(createTableStatement);
-
-    remoteRepositoryDDQ.dropTable("failed_table");
-
-    assertThat(queryStatus, is(queryMessage.onSuccess()));
+    deleteTable("fable");
 
   }
 
   @Test
-  public void queryIndicatedCreatingTableStatementExecutionFailure() {
+  public void queryIndicatedCreatingTableStatementExecutionFailure() throws SQLException {
 
-    String createTableStatement = "Create table failed_table(test varchar(32);";
-
-    String queryStatus = remoteRepositoryDDQ.createTable(createTableStatement);
-
-    assertThat(queryStatus, is(queryMessage.onFailure()));
+    assertQueryExecutionResult("failure","Create table fable(test varchar(32);");
 
   }
 
@@ -144,6 +190,15 @@ public class RemoteRepositoryDataDescribingQueryTest {
     remoteRepositoryDDQ.dropTable(table);
 
     assertThatTableNotExists();
+
+  }
+
+
+  private void assertQueryExecutionResult(String  result, String statement){
+
+    String queryStatus = remoteRepositoryDDQ.createTable(statement);
+
+    assertThat(queryStatus, is(reportMap.get(result).showReport()));
 
   }
 
@@ -172,18 +227,14 @@ public class RemoteRepositoryDataDescribingQueryTest {
       }
     }
 
-    deleteTable(table);
-
-    statement.close();
-
     return tableExistence;
   }
 
 
   private void deleteTable(String tableName) throws SQLException {
-    if (tableExistence) {
+
       statement.executeUpdate("DROP TABLE " + tableName + ";");
-    }
+
   }
 
 }
