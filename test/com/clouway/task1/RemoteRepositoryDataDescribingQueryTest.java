@@ -11,7 +11,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -40,7 +42,6 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
   @Before
   public void setUp() throws SQLException {
-
     String repositoryAddress = "jdbc:postgresql://localhost:5432/workingdb";
     String username = "postgres";
     String password = "";
@@ -55,7 +56,6 @@ public class RemoteRepositoryDataDescribingQueryTest {
   @After
   public void tearDown() throws SQLException {
 
-
     deleteTable(table);
 
     statement.close();
@@ -63,8 +63,11 @@ public class RemoteRepositoryDataDescribingQueryTest {
   }
 
 
+
+
   class RemoteRepositoryDataDescribingQuery {
 
+    private String queryStatus = "";
     private final Statement statement;
 
     public RemoteRepositoryDataDescribingQuery(Statement statement) {
@@ -73,10 +76,15 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
     }
 
-    public void createTable(String createTableStatement) throws SQLException {
-
-      statement.executeUpdate(createTableStatement);
-
+    public String createTable(String createTableStatement){
+     try {
+        statement.executeUpdate(createTableStatement);
+        queryStatus = "Query is executed successfully";
+      } catch (SQLException e) {
+        queryStatus = "Query is executed with fail";
+       e.printStackTrace();
+      }
+      return queryStatus;
     }
 
 
@@ -100,6 +108,31 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
 
   @Test
+  public void queryIndicatedCreatingTableStatementExecutionSuccess() throws SQLException {
+
+    String createTableStatement = "Create table failed_table(test varchar(32));";
+
+    String queryStatus = remoteRepositoryDDQ.createTable(createTableStatement);
+
+    remoteRepositoryDDQ.dropTable("failed_table");
+
+    assertThat(queryStatus, is("Query is executed successfully"));
+
+  }
+
+  @Test
+  public void queryIndicatedCreatingTableStatementExecutionFailure() {
+
+    String createTableStatement = "Create table failed_table(test varchar(32);";
+
+    String queryStatus = remoteRepositoryDDQ.createTable(createTableStatement);
+
+    assertThat(queryStatus,is("Query is executed with fail"));
+
+  }
+
+
+  @Test
   public void queryDropsTable() throws SQLException {
 
     remoteRepositoryDDQ.dropTable(table);
@@ -111,7 +144,7 @@ public class RemoteRepositoryDataDescribingQueryTest {
 
   private void assertThatTableExists() throws SQLException {
 
-     assertTrue(hasTable(table));
+    assertTrue(hasTable(table));
 
   }
 
