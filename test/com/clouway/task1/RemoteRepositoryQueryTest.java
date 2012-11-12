@@ -23,7 +23,6 @@ public class RemoteRepositoryQueryTest {
 
   private final String COLUMN = "firstname";
   private final String EXPECTED_NAME = "GEORGI";
-  private final String RESULT_NAME = "";
   private RemoteRepositoryQuery query;
   private ResultSet set;
 
@@ -59,6 +58,9 @@ public class RemoteRepositoryQueryTest {
     private Statement selectStatement;
     private PreparedStatement selectEgnStatement;
     private PreparedStatement selectWithLikeStatement;
+    private PreparedStatement updateEmailStatement;
+    private PreparedStatement insertRecordStatement;
+    private PreparedStatement deleteRecordStatement;
 
 
     public RemoteRepositoryQuery(String repositoryAddress, String repositoryUsername, String repositoryPassword) {
@@ -82,13 +84,22 @@ public class RemoteRepositoryQueryTest {
 
       preparedStatementList = Lists.newArrayList();
 
-      selectEgnStatement = repositoryConnection.prepareStatement("SELECT * FROM customer WHERE egn=?;");
-      preparedStatementList.add(selectEgnStatement);
+      selectEgnStatement = createStatement(selectEgnStatement, "SELECT * FROM customer WHERE egn=?");
 
-      selectWithLikeStatement = repositoryConnection.prepareStatement("SELECT  * FROM customer WHERE firstname LIKE ?;");
-      preparedStatementList.add(selectWithLikeStatement);
+      selectWithLikeStatement = createStatement(selectWithLikeStatement, "SELECT  * FROM customer WHERE firstname LIKE ?");
 
+      updateEmailStatement = createStatement(updateEmailStatement, "UPDATE customer SET email=? WHERE egn=?");
 
+      insertRecordStatement = createStatement(insertRecordStatement, "INSERT INTO customer VALUES(?,?,?,?,?)");
+
+      deleteRecordStatement = createStatement(deleteRecordStatement, "DELETE FROM customer WHERE firstname=? AND lastname=?");
+
+    }
+
+    private PreparedStatement createStatement(PreparedStatement statement, String statementSyntax) throws SQLException {
+      statement = repositoryConnection.prepareStatement(statementSyntax);
+      preparedStatementList.add(statement);
+      return statement;
     }
 
 
@@ -131,6 +142,42 @@ public class RemoteRepositoryQueryTest {
 
     }
 
+    public void updateEmail(String newEmail, String egn) throws SQLException {
+
+      updateEmailStatement.setString(1, newEmail);
+
+      updateEmailStatement.setString(2, egn);
+
+      updateEmailStatement.executeUpdate();
+
+    }
+
+    public void insertValues(String firstname, String lastname, Integer age, String egn, String email) throws SQLException {
+
+      insertRecordStatement.setString(1, firstname);
+
+      insertRecordStatement.setString(2, lastname);
+
+      insertRecordStatement.setInt(3, age);
+
+      insertRecordStatement.setString(4, egn);
+
+      insertRecordStatement.setString(5, email);
+
+      insertRecordStatement.executeUpdate();
+
+    }
+
+    public void deleteRecord(String firstname, String secondname) throws SQLException {
+
+      deleteRecordStatement.setString(1, firstname);
+
+      deleteRecordStatement.setString(2, secondname);
+
+      deleteRecordStatement.executeUpdate();
+
+    }
+
 
     public void close() throws SQLException {
       if (selectStatement != null) {
@@ -154,7 +201,7 @@ public class RemoteRepositoryQueryTest {
   public void getsRecordFromMultiAttributes() throws SQLException {
 
     set = query.getRecords("egn,firstname,lastname", "customer");
-    assertResult(COLUMN, EXPECTED_NAME, RESULT_NAME);
+    assertResult(COLUMN, EXPECTED_NAME);
 
   }
 
@@ -163,7 +210,7 @@ public class RemoteRepositoryQueryTest {
   public void getsRecordDueSpecifiedEgn() throws SQLException {
 
     set = query.getSpecificEgnRecord("8903191401");
-    assertResult(COLUMN, EXPECTED_NAME, RESULT_NAME);
+    assertResult(COLUMN, EXPECTED_NAME);
 
   }
 
@@ -172,7 +219,7 @@ public class RemoteRepositoryQueryTest {
   public void getsRecordWhereNameStartsWithParticularLetter() throws SQLException {
 
     set = query.getSpecificNameStartingWith("G");
-    assertResult(COLUMN, EXPECTED_NAME, RESULT_NAME);
+    assertResult(COLUMN, EXPECTED_NAME);
 
 
   }
@@ -181,7 +228,7 @@ public class RemoteRepositoryQueryTest {
   public void getsRecordWhereNameContainesCharSequence() throws SQLException {
 
     set = query.getSpecificNameContaining("ORG");
-    assertResult(COLUMN, EXPECTED_NAME, RESULT_NAME);
+    assertResult(COLUMN, EXPECTED_NAME);
 
   }
 
@@ -189,12 +236,46 @@ public class RemoteRepositoryQueryTest {
   public void getsRecordWhereNameEndsWithParticularLetter() throws SQLException {
 
     set = query.getSpecificNameEnding("I");
-    assertResult(COLUMN, EXPECTED_NAME, RESULT_NAME);
+    assertResult(COLUMN, EXPECTED_NAME);
+
+  }
+
+  @Test
+  public void updatesEmailOfRecordUsingEgn() throws SQLException {
+
+    query.updateEmail("ggeorgiev@evo.bg", "8903191401");
+
+    set = query.getRecords("email", "customer");
+
+    assertResult("email", "ggeorgiev@evo.bg");
+
+  }
+
+  @Test
+  public void insertsNewRecordIntoREpository() throws SQLException {
+
+    query.insertValues("IVAN", "IVANOV", 23, "8904041404", "ivan.ivanov@abv.bg");
+
+    set = query.getRecords("count(*)", "customer");
+
+    assertResult("count", "2");
+
+  }
+
+  @Test
+  public void deleteRecordFromRepository() throws SQLException {
+
+    query.deleteRecord("IVAN", "IVANOV");
+
+    set = query.getRecords("count(*)", "customer");
+
+    assertResult("count", "1");
 
   }
 
 
-  private void assertResult(String column, String expected, String result) throws SQLException {
+  private void assertResult(String column, String expected) throws SQLException {
+    String result = "";
     while (set.next()) {
       result = set.getString(column);
     }
