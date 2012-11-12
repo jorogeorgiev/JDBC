@@ -1,20 +1,15 @@
 package com.clouway.task1;
 
-import com.google.common.collect.Lists;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
+import static org.hamcrest.core.IsNot.not;
 
 /**
  * @author georgi.hristov@clouway.com
@@ -48,152 +43,34 @@ public class RemoteRepositoryQueryTest {
   }
 
 
-  class RemoteRepositoryQuery {
-
-    private final String repositoryAddress;
-    private final String repositoryUsername;
-    private final String repositoryPassword;
-    private Connection repositoryConnection;
-    private List<PreparedStatement> preparedStatementList;
-    private Statement selectStatement;
-    private PreparedStatement selectEgnStatement;
-    private PreparedStatement selectWithLikeStatement;
-    private PreparedStatement updateEmailStatement;
-    private PreparedStatement insertRecordStatement;
-    private PreparedStatement deleteRecordStatement;
 
 
-    public RemoteRepositoryQuery(String repositoryAddress, String repositoryUsername, String repositoryPassword) {
 
-      this.repositoryAddress = repositoryAddress;
-      this.repositoryUsername = repositoryUsername;
-      this.repositoryPassword = repositoryPassword;
+
+  class DropOrCreate{
+
+    private RemoteRepositoryQuery query;
+
+    public DropOrCreate(RemoteRepositoryQuery query) {
+
+      this.query = query;
 
     }
 
-    public void connect() throws SQLException {
+    public void executeCommand(String command, String table) throws SQLException {
+      if(command.equals("create")){
 
-      repositoryConnection = DriverManager.getConnection(repositoryAddress, repositoryUsername, repositoryPassword);
+        query.createTable("CREATE TABLE " + table + "();");
 
-    }
+      } else{
 
+        query.dropTable(table);
 
-    public void createStatements() throws SQLException {
-
-      selectStatement = repositoryConnection.createStatement();
-
-      preparedStatementList = Lists.newArrayList();
-
-      selectEgnStatement = createStatement(selectEgnStatement, "SELECT * FROM customer WHERE egn=?");
-
-      selectWithLikeStatement = createStatement(selectWithLikeStatement, "SELECT  * FROM customer WHERE firstname LIKE ?");
-
-      updateEmailStatement = createStatement(updateEmailStatement, "UPDATE customer SET email=? WHERE egn=?");
-
-      insertRecordStatement = createStatement(insertRecordStatement, "INSERT INTO customer VALUES(?,?,?,?,?)");
-
-      deleteRecordStatement = createStatement(deleteRecordStatement, "DELETE FROM customer WHERE firstname=? AND lastname=?");
-
-    }
-
-    private PreparedStatement createStatement(PreparedStatement statement, String statementSyntax) throws SQLException {
-      statement = repositoryConnection.prepareStatement(statementSyntax);
-      preparedStatementList.add(statement);
-      return statement;
-    }
-
-
-    public ResultSet getRecords(String columnNames, String tableNames) throws SQLException {
-
-      return selectStatement.executeQuery("SELECT " + columnNames + " From " + tableNames + ";");
-
-    }
-
-
-    public ResultSet getSpecificEgnRecord(String egn) throws SQLException {
-
-      selectEgnStatement.setString(1, egn);
-
-      return selectEgnStatement.executeQuery();
-
-    }
-
-    public ResultSet getSpecificNameStartingWith(String startCharacters) throws SQLException {
-
-      selectWithLikeStatement.setString(1, startCharacters + "%");
-
-      return selectWithLikeStatement.executeQuery();
-
-    }
-
-    public ResultSet getSpecificNameContaining(String charSequence) throws SQLException {
-
-      selectWithLikeStatement.setString(1, "%" + charSequence + "%");
-
-      return selectWithLikeStatement.executeQuery();
-
-    }
-
-    public ResultSet getSpecificNameEnding(String endCharacter) throws SQLException {
-
-      selectWithLikeStatement.setString(1, "%" + endCharacter);
-
-      return selectWithLikeStatement.executeQuery();
-
-    }
-
-    public void updateEmail(String newEmail, String egn) throws SQLException {
-
-      updateEmailStatement.setString(1, newEmail);
-
-      updateEmailStatement.setString(2, egn);
-
-      updateEmailStatement.executeUpdate();
-
-    }
-
-    public void insertValues(String firstname, String lastname, Integer age, String egn, String email) throws SQLException {
-
-      insertRecordStatement.setString(1, firstname);
-
-      insertRecordStatement.setString(2, lastname);
-
-      insertRecordStatement.setInt(3, age);
-
-      insertRecordStatement.setString(4, egn);
-
-      insertRecordStatement.setString(5, email);
-
-      insertRecordStatement.executeUpdate();
-
-    }
-
-    public void deleteRecord(String firstname, String secondname) throws SQLException {
-
-      deleteRecordStatement.setString(1, firstname);
-
-      deleteRecordStatement.setString(2, secondname);
-
-      deleteRecordStatement.executeUpdate();
-
-    }
-
-
-    public void close() throws SQLException {
-      if (selectStatement != null) {
-        selectStatement.close();
-      }
-      if (repositoryConnection != null) {
-        repositoryConnection.close();
-      }
-      for (PreparedStatement statement : preparedStatementList) {
-        if (statement != null) {
-          statement.close();
-        }
       }
 
-    }
 
+
+    }
 
   }
 
@@ -273,8 +150,79 @@ public class RemoteRepositoryQueryTest {
 
   }
 
+  @Test
+  public void createsNewTableIntoRepository() throws SQLException {
 
-  private void assertResult(String column, String expected) throws SQLException {
+    assertTablesCount(new DropOrCreate(query), "create", "test");
+
+  }
+
+
+  @Test
+  public void dropsTableFromDatabase() throws SQLException {
+
+    assertTablesCount(new DropOrCreate(query), "drop", "test");
+
+  }
+
+
+  @Test
+  public void addAdditionalColumnToTheTable() throws SQLException {
+
+    assertColumnsCount(new DropOrAdd(query),"add","country");
+
+  }
+
+  @Test
+  public void deleteColumnFromATable() throws SQLException {
+
+    assertColumnsCount(new DropOrAdd(query),"drop","country");
+
+  }
+
+
+  private void assertColumnsCount(DropOrAdd doa, String command, String columnName) throws SQLException {
+
+    int countBeforeExecution = countColumns();
+
+    doa.executeCommand(command,columnName);
+
+    int countAfterExecution = countColumns();
+
+    assertThat(countAfterExecution, not(countBeforeExecution));
+  }
+
+  private int countColumns() throws SQLException {
+
+    ResultSet set  = query.getRecords("*","customer");
+
+    ResultSetMetaData setMetaData = set.getMetaData();
+
+    return setMetaData.getColumnCount();
+
+  }
+
+  private void assertTablesCount(DropOrCreate doc, String command, String table) throws SQLException {
+
+    int countBeforeExecution = countTables();
+
+    doc.executeCommand(command,table);
+
+    int countAfterExecution = countTables();
+
+    assertThat(countAfterExecution, not(countBeforeExecution));
+  }
+
+  private int countTables() throws SQLException {
+    int temp=0;
+    set = query.getRecords("count(*)", "information_schema.tables");
+    while (set.next()) {
+      temp = Integer.valueOf(set.getString("count"));
+    }
+    return temp;
+  }
+
+ private void assertResult(String column, String expected) throws SQLException {
     String result = "";
     while (set.next()) {
       result = set.getString(column);
